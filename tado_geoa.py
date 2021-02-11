@@ -10,6 +10,20 @@ from PyTado.interface import Tado
 
 def main():
 
+    global lastMessage
+    global username
+    global password
+    global checkingInterval
+    global errorRetringInterval
+
+    lastMessage = ""
+
+    username = "your_username@mail.com" # tado username
+    password = "your_password" # tado password
+
+    checkingInterval = 6.0 # checking interval (in seconds)
+    errorRetringInterval = 20.0 # retrying interval (in seconds), in case of an error
+
     login()
     homeStatus()
     
@@ -18,34 +32,42 @@ def login():
     global t
 
     try:
-        t = Tado('your_username@mail.com', 'your_password') # tado account and password
+        t = Tado(username, password)
+
+        if (lastMessage.find("Connection Error") != -1):
+            printm ("Connection established, everything looks good now, continuing..\n")
+
+    except KeyboardInterrupt:
+        printm ("Interrupted by user.")
+        sys.exit(0)
 
     except Exception as e:
-        print (e)
-        if (str(e).find("ConnectionError") != -1):
-            print ("Connection Error, retrying in 30 sec..")
-            time.sleep(30) # retrying interval (in seconds), in case of connection error
-            login()
-        else:
-            print ("Login error.")
+        if (str(e).find("access_token") != -1):
+            printm ("Login error, check the username / password !")
             sys.exit(0)
+        else:
+            printm (str(e) + "\nConnection Error, retrying in " + str(errorRetringInterval) + " sec..")
+            time.sleep(errorRetringInterval)
+            login()    
 
 def homeStatus():
 
     global devicesHome
 
     try:
-
         homeState = t.getHomeState()["presence"]
         devicesHome = []
 
         for mobileDevice in t.getMobileDevices():
             if (mobileDevice["location"]["relativeDistanceFromHomeFence"] == 0.0):
-                devicesHome.append(mobileDevice["name"]) 
+                devicesHome.append(mobileDevice["name"])
+
+        if (lastMessage.find("Connection Error") != -1 or lastMessage.find("Waiting for the user to sign in") != -1):
+            printm ("Connection established, everything looks good now, continuing..\n")
 
         if (len(devicesHome) > 0 and homeState == "HOME"):
             if (len(devicesHome) == 1):
-                print ("Your home is in HOME Mode, the device " + devicesHome[0] + " is at home.")
+                printm ("Your home is in HOME Mode, the device " + devicesHome[0] + " is at home.")
             else:
                 devices = ""
                 for i in range(len(devicesHome)):
@@ -53,17 +75,17 @@ def homeStatus():
                         devices += devicesHome[i] + ", "
                     else:
                         devices += devicesHome[i]
-                print ("Your home is in HOME Mode, the devices " + devices + " are at home.")
+                printm ("Your home is in HOME Mode, the devices " + devices + " are at home.")
         elif (len(devicesHome) == 0 and homeState == "AWAY"):
-            print ("Your home is in AWAY Mode and are no devices at home.")
+            printm ("Your home is in AWAY Mode and are no devices at home.")
         elif (len(devicesHome) == 0 and homeState == "HOME"):
-            print ("Your home is in HOME Mode but are no devices at home.")
-            print ("Activating AWAY mode.")
+            printm ("Your home is in HOME Mode but are no devices at home.")
+            printm ("Activating AWAY mode.")
             t.setAway()
-            print ("Done!")
+            printm ("Done!")
         elif (len(devicesHome) > 0 and homeState == "AWAY"):
             if (len(devicesHome) == 1):
-                print ("Your home is in AWAY Mode but the device " + devicesHome[0] + " is at home.")
+                printm ("Your home is in AWAY Mode but the device " + devicesHome[0] + " is at home.")
             else:
                 devices = ""
                 for i in range(len(devicesHome) - 1):
@@ -71,41 +93,48 @@ def homeStatus():
                         devices += devicesHome[i] + ", "
                     else:
                         devices += devicesHome[i]
-                print ("Your home is in AWAY Mode but the devices " + devices + " are at home.")
+                printm ("Your home is in AWAY Mode but the devices " + devices + " are at home.")
 
-            print ("Activating HOME mode.")
+            printm ("Activating HOME mode.")
             t.setHome()
-            print ("Done!")
+            printm ("Done!")
 
         devicesHome.clear()
-        print ("Waiting for a change in devices location..")
-        checkDevicesLocation()
+        printm ("Waiting for a change in devices location..")
+        time.sleep(checkingInterval)
+        geofencing()
 
     except KeyboardInterrupt:
-        print ("Interrupted by user.")
+        printm ("Interrupted by user.")
         sys.exit(0)
 
     except Exception as e:
-        print(e)
-        if (str(e).find("ConnectionError") != -1):
-            print ("Connection Error, retrying in 30 sec..")
-    
-            time.sleep(30) # retrying interval (in seconds), in case of connection error
-            homeStatus()
+        if (str(e).find("location") != -1):
+            printm ("I cannot get the location of one of the devices because the user signed out from tado app.\nWaiting for the user to sign in, until then the Geofencing Assist is NOT active.")
+            time.sleep(errorRetringInterval)
+        elif (str(e).find("NoneType") != -1):
+            time.sleep(errorRetringInterval)
+        else:
+            printm (str(e) + "\nConnection Error, retrying in " + str(errorRetringInterval) + " sec..")
+            time.sleep(errorRetringInterval)
+        homeStatus()
 
-def checkDevicesLocation():
+def geofencing():
 
     try:
-
         homeState = t.getHomeState()["presence"]
 
         for mobileDevice in t.getMobileDevices():
             if (mobileDevice["location"]["relativeDistanceFromHomeFence"] == 0.0):
                 devicesHome.append(mobileDevice["name"]) 
 
+        if (lastMessage.find("Connection Error") != -1 or lastMessage.find("Waiting for the user to sign in") != -1):
+            printm ("Connection established, everything looks good now, continuing..\n")
+            printm ("Waiting for a change in devices location..")
+        
         if (len(devicesHome) > 0 and homeState == "AWAY"):
             if (len(devicesHome) == 1):
-                print (devicesHome[0] + " is at home, activating HOME mode.")
+                printm (devicesHome[0] + " is at home, activating HOME mode.")
             else:
                 devices = ""
                 for i in range(len(devicesHome)):
@@ -113,32 +142,38 @@ def checkDevicesLocation():
                         devices += devicesHome[i] + ", "
                     else:
                         devices += devicesHome[i]
-                print (devices + " are at home, activating HOME mode.")
+                printm (devices + " are at home, activating HOME mode.")
             t.setHome()
-            print ("Done!")
-            print ("Waiting for a change in devices location..")
+            printm ("Done!")
+            printm ("Waiting for a change in devices location..")
 
         elif (len(devicesHome) == 0 and homeState == "HOME"):
-            print ("Are no devices at home, activating AWAY mode.")
+            printm ("Are no devices at home, activating AWAY mode.")
             t.setAway()
-            print ("Done!")
-            print ("Waiting for a change in devices location..")
-    
-        devicesHome.clear()
+            printm ("Done!")
+            printm ("Waiting for a change in devices location..")
 
-        time.sleep(5) # checking interval (in seconds)
-        checkDevicesLocation()
+        devicesHome.clear()
+        time.sleep(checkingInterval)
+        geofencing()
 
     except KeyboardInterrupt:
-        print ("Interrupted by user.")
+        printm ("Interrupted by user.")
         sys.exit(0)
 
     except Exception as e:
-        print(e)
-        if (str(e).find("ConnectionError") != -1):
-            print ("Connection Error, retrying in 30 sec..")
-    
-            time.sleep(30) # retrying interval (in seconds), in case of connection error
-            checkDevicesLocation()
+        if (str(e).find("location") != -1 or str(e).find("NoneType") != -1):
+            printm ("I cannot get the location of one of the devices because the user signed out from tado app.\nWaiting for the user to sign in, until then the Geofencing Assist is NOT active.")
+            time.sleep(checkingInterval)
+        else:
+            printm (str(e) + "\nConnection Error, retrying in " + str(errorRetringInterval) + " sec..")
+            time.sleep(errorRetringInterval)
+        geofencing()
+
+def printm(message):
+    global lastMessage
+    if (message != lastMessage):
+        lastMessage = (message)
+        sys.stdout.write(message + "\n")
 
 main()
