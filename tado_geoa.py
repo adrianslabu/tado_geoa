@@ -120,60 +120,62 @@ def homeStatus():
         homeStatus()
 
 def geofencing():
+    
+    i = 0
+    while i < 3: # My solution to fix the "stack depth"
+        try:
+            homeState = t.getHomeState()["presence"]
 
-    try:
-        homeState = t.getHomeState()["presence"]
+            for mobileDevice in t.getMobileDevices():
+                if (mobileDevice["location"]["relativeDistanceFromHomeFence"] == 0.0):
+                    devicesHome.append(mobileDevice["name"]) 
 
-        for mobileDevice in t.getMobileDevices():
-            if (mobileDevice["location"]["relativeDistanceFromHomeFence"] == 0.0):
-                devicesHome.append(mobileDevice["name"]) 
+            if (lastMessage.find("Connection Error") != -1 or lastMessage.find("Waiting for the user to sign in") != -1):
+                printm ("Connection established, everything looks good now, continuing..\n")
+                printm ("Waiting for a change in devices location..")
 
-        if (lastMessage.find("Connection Error") != -1 or lastMessage.find("Waiting for the user to sign in") != -1):
-            printm ("Connection established, everything looks good now, continuing..\n")
-            printm ("Waiting for a change in devices location..")
-        
-        if (len(devicesHome) > 0 and homeState == "AWAY"):
-            if (len(devicesHome) == 1):
-                printm (devicesHome[0] + " is at home, activating HOME mode.")
-            else:
-                devices = ""
-                for i in range(len(devicesHome)):
-                    if (i != len(devicesHome) - 1):
-                        devices += devicesHome[i] + ", "
-                    else:
-                        devices += devicesHome[i]
-                printm (devices + " are at home, activating HOME mode.")
-            t.setHome()
-            printm ("Done!")
-            printm ("Waiting for a change in devices location..")
+            if (len(devicesHome) > 0 and homeState == "AWAY"):
+                if (len(devicesHome) == 1):
+                    printm (devicesHome[0] + " is at home, activating HOME mode.")
+                else:
+                    devices = ""
+                    for i in range(len(devicesHome)):
+                        if (i != len(devicesHome) - 1):
+                            devices += devicesHome[i] + ", "
+                        else:
+                            devices += devicesHome[i]
+                    printm (devices + " are at home, activating HOME mode.")
+                t.setHome()
+                printm ("Done!")
+                printm ("Waiting for a change in devices location..")
 
-        elif (len(devicesHome) == 0 and homeState == "HOME"):
-            printm ("Are no devices at home, activating AWAY mode.")
-            t.setAway()
-            printm ("Done!")
-            printm ("Waiting for a change in devices location..")
+            elif (len(devicesHome) == 0 and homeState == "HOME"):
+                printm ("Are no devices at home, activating AWAY mode.")
+                t.setAway()
+                printm ("Done!")
+                printm ("Waiting for a change in devices location..")
 
-        devicesHome.clear()
-        time.sleep(checkingInterval)
-        geofencing()
-
-    except KeyboardInterrupt:
-        printm ("Interrupted by user.")
-        sys.exit(0)
-
-    except Exception as e:
-        if (str(e).find("location") != -1 or str(e).find("NoneType") != -1):
-            printm ("I cannot get the location of one of the devices because the user signed out from tado app.\nWaiting for the user to sign in, until then the Geofencing Assist is NOT active.")
+            devicesHome.clear()
             time.sleep(checkingInterval)
-        else:
-            printm (str(e) + "\nConnection Error, retrying in " + str(errorRetringInterval) + " sec..")
-            time.sleep(errorRetringInterval)
-        geofencing()
+            geofencing()
+
+        except KeyboardInterrupt:
+            printm ("Interrupted by user.")
+            sys.exit(0)
+
+        except Exception as e:
+            if (str(e).find("location") != -1 or str(e).find("NoneType") != -1):
+                printm ("I cannot get the location of one of the devices because the user signed out from tado app.\nWaiting for the user to sign in, until then the Geofencing Assist is NOT active.")
+                time.sleep(checkingInterval)
+            else:
+                printm (str(e) + "\nConnection Error, retrying in " + str(errorRetringInterval) + " sec..")
+                time.sleep(errorRetringInterval)
+            geofencing()
 
 def printm(message):
     global lastMessage
     if (message != lastMessage):
-        lastMessage = (message)
+        lastMessage = message
         sys.stdout.write(message + "\n")
 
 main()
